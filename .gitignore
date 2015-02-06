@@ -1,0 +1,4 @@
+pingtcp
+*.o
+*~
+*.swp
