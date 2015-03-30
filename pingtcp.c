@@ -40,7 +40,7 @@
 
 static void __usage(char* _argv0)
 {
-	fprintf(stderr, "Usage: %s <host> <port>\n", basename(_argv0));
+	fprintf(stderr, "Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout]\n", basename(_argv0));
 	exit(EX_USAGE);
 }
 
@@ -69,9 +69,11 @@ int main(int argc, char** argv)
 	int socket_fd = -1;
 	int port = -1;
 	int res;
+	int arg_index = 1;
 	uint64_t attempt = 0;
 	uint64_t ok = 0;
 	uint64_t fail = 0;
+	uint64_t limit = 0;
 	unsigned short int current_ptr = 0;
 	time_t time_to_ping = 0;
 	time_t wall_time = 0;
@@ -107,6 +109,8 @@ int main(int argc, char** argv)
 	memzero(&pingtcp_oldmask, sizeof(sigset_t));
 	timeout.tv_sec = 1;
 	timeout.tv_usec = 0;
+	time_to_sleep.tv_sec = 1;
+	time_to_sleep.tv_nsec = 0;
 
 	if (unlikely(sigemptyset(&pingtcp_newmask) != 0))
 	{
@@ -129,24 +133,74 @@ int main(int argc, char** argv)
 		exit(EX_OSERR);
 	}
 
-	if (argc == 2)
-	{
-		if (strcmp(argv[1], "--help") == 0 ||
-				strcmp(argv[1], "-h") == 0)
-			__usage(argv[0]);
-		else if (strcmp(argv[1], "--version") == 0 ||
-				strcmp(argv[1], "-v") == 0)
-			__version();
-		else
-			__usage(argv[0]);
-	}
-
-	if (argc != 3)
+	if (argc < 2)
 		__usage(argv[0]);
 
-	host = strdupa(argv[1]);
-	if (isnumber(argv[2]))
-		port = atoi(argv[2]);
+	while (arg_index < argc)
+	{
+		if (strcmp(argv[arg_index], "--help") == 0 ||
+			strcmp(argv[arg_index], "-h") == 0)
+			__usage(argv[0]);
+
+		if (strcmp(argv[arg_index], "--version") == 0 ||
+			strcmp(argv[arg_index], "-v") == 0)
+			__version();
+
+		if (strcmp(argv[arg_index], "--count") == 0 ||
+			strcmp(argv[arg_index], "-c") == 0)
+		{
+			if (isnumber(argv[arg_index + 1]))
+			{
+				limit = atoi(argv[arg_index + 1]);
+				arg_index += 2;
+				continue;
+			} else
+				__usage(argv[0]);
+		}
+
+		if (strcmp(argv[arg_index], "--interval") == 0 ||
+			strcmp(argv[arg_index], "-i") == 0)
+		{
+			if (isnumber(argv[arg_index + 1]))
+			{
+				time_to_sleep.tv_sec = atoi(argv[arg_index + 1]);
+				arg_index += 2;
+				continue;
+			} else
+				__usage(argv[0]);
+		}
+
+		if (strcmp(argv[arg_index], "--timeout") == 0 ||
+			strcmp(argv[arg_index], "-t") == 0)
+		{
+			if (isnumber(argv[arg_index + 1]))
+			{
+				timeout.tv_sec = atoi(argv[arg_index + 1]);
+				arg_index += 2;
+				continue;
+			} else
+				__usage(argv[0]);
+		}
+
+		if (!host)
+		{
+			host = strdupa(argv[arg_index]);
+			arg_index++;
+			continue;
+		}
+
+		if (port == -1)
+		{
+			if (isnumber(argv[arg_index]))
+			{
+				port = atoi(argv[arg_index]);
+				arg_index++;
+				continue;
+			}
+		}
+
+		arg_index++;
+	}
 
 	if (port == -1)
 	{
@@ -255,8 +309,9 @@ int main(int argc, char** argv)
 			fail++;
 		}
 
-		time_to_sleep.tv_sec = 1;
-		time_to_sleep.tv_nsec = 0;
+		if (limit != 0 && attempt + 1 > limit)
+			break;
+
 		res = sigtimedwait(&pingtcp_newmask, NULL, &time_to_sleep);
 		if (likely(res == -1))
 		{
