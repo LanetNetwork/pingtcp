@@ -51,6 +51,8 @@ int main(int argc, char** argv)
 	int socket_fd = -1;
 	int port = -1;
 	int res;
+	int sock_error = 0;
+	socklen_t sock_error_length = sizeof(int);
 	int epoll_fd = 0;
 	int epoll_count = 0;
 	uint64_t attempt = 0;
@@ -216,8 +218,16 @@ int main(int argc, char** argv)
 					fail++;
 				else
 				{
-					ok++;
-					current_ok = 1;
+					if (likely(getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &sock_error, &sock_error_length) == 0))
+					{
+						if (likely(sock_error == 0))
+						{
+							current_ok = 1;
+							ok++;
+						} else
+							fail++;
+					} else
+						fail++;
 				}
 				if (unlikely(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, socket_fd, NULL) == -1))
 				{
