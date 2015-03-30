@@ -21,6 +21,12 @@
 #include <time.h>
 #include <unistd.h>
 
+#define APP_VERSION		"0.0.1"
+#define APP_YEAR		"2015"
+#define APP_HOLDER		"Lanet Network"
+#define APP_PROGRAMMER	"Oleksandr Natalenko"
+#define APP_EMAIL		"o.natalenko@lanet.ua"
+
 #define EPOLL_MAXEVENTS	1
 #define FQDN_MAX_LENGTH	254
 
@@ -33,6 +39,20 @@
 #define likely(x)		(x)
 #define unlikely(x)		(x)
 #endif /* __GNUC__ */
+
+static void __usage(char* _argv0)
+{
+	fprintf(stderr, "Usage: %s <host> <port>\n", basename(_argv0));
+	exit(EX_USAGE);
+}
+
+static void __version(void)
+{
+	fprintf(stderr, "pingtcp v%s\n", APP_VERSION);
+	fprintf(stderr, "© %s, %s\n", APP_YEAR, APP_HOLDER);
+	fprintf(stderr, "Programmed by %s <%s>\n", APP_PROGRAMMER, APP_EMAIL);
+	exit(EX_USAGE);
+}
 
 static int isnumber(const char* _string)
 {
@@ -117,11 +137,20 @@ int main(int argc, char** argv)
 		exit(EX_OSERR);
 	}
 
-	if (argc < 3)
+	if (argc == 2)
 	{
-		fprintf(stderr, "Usage: %s <host> <port>\n", basename(argv[0]));
-		exit(EX_USAGE);
+		if (strcmp(argv[1], "--help") == 0 ||
+				strcmp(argv[1], "-h") == 0)
+			__usage(argv[0]);
+		else if (strcmp(argv[1], "--version") == 0 ||
+				strcmp(argv[1], "-v") == 0)
+			__version();
+		else
+			__usage(argv[0]);
 	}
+
+	if (argc != 3)
+		__usage(argv[0]);
 
 	host = strdupa(argv[1]);
 	if (isnumber(argv[2]))
