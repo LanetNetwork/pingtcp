@@ -16,7 +16,7 @@ CFLAGS ?= -O3 -std=c99 -Wall -Wextra -pedantic \
 	-Wold-style-definition \
 	-Wstrict-prototypes \
 	-Wmissing-prototypes
-LDADD ?= -lrt -lpthread
+LDADD ?= -lrt -lpthread -lm
 
 all: $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) $(LDADD) -o $(APP)
