@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #define EPOLL_MAXEVENTS	1
+#define FQDN_MAX_LENGTH	254
 
 #define memzero(A,B)	memset(A, 0, B)
 
@@ -56,6 +57,7 @@ int main(int argc, char** argv)
 	uint64_t ok = 0;
 	uint64_t fail = 0;
 	unsigned short int current_ok = 0;
+	unsigned short int current_ptr = 0;
 	time_t time_to_ping = 0;
 	time_t wall_time = 0;
 	double time_to_ping_ms = 0;
@@ -69,6 +71,7 @@ int main(int argc, char** argv)
 	double rtt_mdev = 0;
 	char* host = NULL;
 	char* host_ip = NULL;
+	char ptr[FQDN_MAX_LENGTH];
 	struct addrinfo* server = NULL;
 	struct addrinfo hints;
 	struct sockaddr_in server_address;
@@ -163,6 +166,7 @@ int main(int argc, char** argv)
 	{
 		attempt++;
 		current_ok = 0;
+		current_ptr = 0;
 
 		socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 		if (unlikely(socket_fd == -1))
@@ -174,6 +178,10 @@ int main(int argc, char** argv)
 		server_address.sin_family = AF_INET;
 		memcpy(&server_address.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
 		server_address.sin_port = htons(port);
+
+		memzero(ptr, FQDN_MAX_LENGTH);
+		if (likely(getnameinfo((const struct sockaddr* restrict)&server_address, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+			current_ptr = 1;
 
 		time_to_sleep.tv_sec = 1;
 		time_to_sleep.tv_nsec = 0;
@@ -235,7 +243,7 @@ int main(int argc, char** argv)
 		time_to_ping_ms = (double)time_to_ping / 1000000.0;
 		if (current_ok)
 		{
-			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
+			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, host_ip, attempt, time_to_ping_ms);
 			if (time_to_ping_ms > rtt_max)
 				rtt_max = time_to_ping_ms;
 			if (time_to_ping_ms < rtt_min)
@@ -243,7 +251,7 @@ int main(int argc, char** argv)
 			rtt_sum += time_to_ping_ms;
 			rtt_sum_sqr += pow(time_to_ping_ms, 2.0);
 		} else
-			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", host, port, host_ip, attempt);
+			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", current_ptr ? ptr : host, port, host_ip, attempt);
 
 		res = sigtimedwait(&pingtcp_newmask, NULL, &time_to_sleep);
 		if (likely(res == -1))
