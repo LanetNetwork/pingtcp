@@ -285,6 +285,10 @@ int main(int argc, char** argv)
 		rtt_sum /= ok;
 		rtt_sum_sqr /= ok;
 		rtt_mdev = sqrt(rtt_sum_sqr - pow(rtt_sum, 2.0));
+	} else
+	{
+		rtt_min = 0;
+		rtt_max = 0;
 	}
 	printf("%lu handshakes started, %lu succeeded, %1.3lf%% loss, time %1.3lf ms\n", attempt, ok, loss, wall_time_ms);
 	printf("rtt min/avg/max/mdev = %1.3lf/%1.3lf/%1.3lf/%1.3lf\n", rtt_min, rtt_avg, rtt_max, rtt_mdev);
