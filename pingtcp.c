@@ -1,6 +1,7 @@
 /* vim: set tabstop=4:softtabstop=4:shiftwidth=4:noexpandtab */
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
@@ -15,9 +16,30 @@
 #include <time.h>
 #include <unistd.h>
 
+#define memzero(A,B)	memset(A, 0, B)
+
+#ifdef __GNUC__
+#define likely(x)		__builtin_expect(!!(x), 1)
+#define unlikely(x)		__builtin_expect(!!(x), 0)
+#else /* __GNUC__ */
+#define likely(x)		(x)
+#define unlikely(x)		(x)
+#endif /* __GNUC__ */
+
+static int isnumber(const char* _string)
+{
+	while (likely(*_string))
+	{
+		char current_char = *_string++;
+		if (unlikely(isdigit(current_char) == 0))
+			return 0;
+	}
+
+	return 1;
+}
+
 int main(int argc, char** argv)
 {
-	int opts;
 	int socket_fd = -1;
 	int port = -1;
 	int res;
@@ -33,33 +55,21 @@ int main(int argc, char** argv)
 	struct timespec ping_time_start;
 	struct timespec ping_time_end;
 
-	memset(&server_address, 0, sizeof(struct sockaddr_in));
+	memzero(&server_address, sizeof(struct sockaddr_in));
 
-	struct option longopts[] = {
-		{"host",	required_argument,	NULL, 'a'},
-		{"port",	required_argument,	NULL, 'b'},
-		{0, 0, 0, 0}
-	};
-
-	while ((opts = getopt_long(argc, argv, "ab", longopts, NULL)) != -1)
+	if (argc < 3)
 	{
-		switch (opts)
-		{
-			case 'a':
-				host = strdupa(optarg);
-				break;
-			case 'b':
-				port = atoi(optarg);
-				break;
-			default:
-				exit(EX_USAGE);
-				break;
-		}
+		fprintf(stderr, "Usage: %s <host> <port>\n", basename(argv[0]));
+		exit(EX_USAGE);
 	}
 
-	if (port == -1 || host == NULL)
+	host = strdupa(argv[1]);
+	if (isnumber(argv[2]))
+		port = atoi(argv[2]);
+
+	if (port == -1)
 	{
-		printf("Usage: %s --host=<host> --port=<port>\n", basename(argv[0]));
+		fprintf(stderr, "Wrong port specified\n");
 		exit(EX_USAGE);
 	}
 
@@ -67,12 +77,14 @@ int main(int argc, char** argv)
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = 0;
 	res = getaddrinfo(host, NULL, &hints, &server);
-	if (res)
+	if (unlikely(res))
 	{
 		fprintf(stderr, "%s\n", gai_strerror(res));
 		exit(EX_OSERR);
 	}
 	host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
+	if (unlikely(!host_ip))
+		perror("inet_ntoa");
 
 	printf("PINGTCP %s (%s)\n", host, host_ip);
 
@@ -81,7 +93,7 @@ int main(int argc, char** argv)
 		attempt++;
 
 		socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-		if (socket_fd == -1)
+		if (unlikely(socket_fd == -1))
 		{
 			perror("socket");
 			exit(EX_OSERR);
@@ -94,25 +106,25 @@ int main(int argc, char** argv)
 		time_to_sleep.tv_sec = 1;
 		time_to_sleep.tv_nsec = 0;
 
-		if (clock_gettime(CLOCK_MONOTONIC, &ping_time_start) == -1)
+		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_start) == -1))
 		{
 			perror("clock_gettime");
 			exit(EX_OSERR);
 		}
 
-		if (connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in)) == -1)
+		if (unlikely(connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in)) == -1))
 		{
 			perror("connect");
 			exit(EX_SOFTWARE);
 		}
 
-		if (close(socket_fd) == -1)
+		if (unlikely(close(socket_fd) == -1))
 		{
 			perror("close");
 			exit(EX_OSERR);
 		}
 
-		if (clock_gettime(CLOCK_MONOTONIC, &ping_time_end) == -1)
+		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_end) == -1))
 		{
 			perror("clock_gettime");
 			exit(EX_OSERR);
@@ -125,7 +137,7 @@ int main(int argc, char** argv)
 		time_to_ping_ms = (double)time_to_ping / 1000000.0;
 		printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
 
-		while (nanosleep(&time_to_sleep, &time_to_sleep) == -1 && errno == EINTR)
+		while (likely(nanosleep(&time_to_sleep, &time_to_sleep) == -1 && errno == EINTR))
 			continue;
 	}
 
