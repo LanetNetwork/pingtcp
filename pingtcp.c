@@ -141,20 +141,6 @@ int main(int argc, char** argv)
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = 0;
-	res = getaddrinfo(host, NULL, &hints, &server);
-	if (unlikely(res))
-	{
-		fprintf(stderr, "%s\n", gai_strerror(res));
-		exit(EX_OSERR);
-	}
-	host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
-	if (unlikely(!host_ip))
-	{
-		perror("inet_ntoa");
-		exit(EX_OSERR);
-	}
-
-	printf("PINGTCP %s (%s)\n", host, host_ip);
 
 	if (unlikely(clock_gettime(CLOCK_MONOTONIC, &wall_time_start) == -1))
 	{
@@ -175,9 +161,26 @@ int main(int argc, char** argv)
 			exit(EX_OSERR);
 		}
 
+		res = getaddrinfo(host, NULL, &hints, &server);
+		if (unlikely(res))
+		{
+			fprintf(stderr, "%s\n", gai_strerror(res));
+			exit(EX_OSERR);
+		}
+		host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
+		if (unlikely(!host_ip))
+		{
+			perror("inet_ntoa");
+			exit(EX_OSERR);
+		}
+
+		if (unlikely(attempt == 1))
+			printf("PINGTCP %s (%s:%d)\n", host, host_ip, port);
 		server_address.sin_family = AF_INET;
 		memcpy(&server_address.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
 		server_address.sin_port = htons(port);
+
+		freeaddrinfo(server);
 
 		memzero(ptr, FQDN_MAX_LENGTH);
 		if (likely(getnameinfo((const struct sockaddr* restrict)&server_address, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
@@ -272,8 +275,6 @@ int main(int argc, char** argv)
 		perror("clock_gettime");
 		exit(EX_OSERR);
 	}
-
-	freeaddrinfo(server);
 
 	if (unlikely(pthread_sigmask(SIG_UNBLOCK, &pingtcp_newmask, NULL) != 0))
 	{
