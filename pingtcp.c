@@ -355,7 +355,7 @@ int main(int argc, char** argv)
 		rtt_min = 0;
 		rtt_max = 0;
 	}
-	printf("%lu handshakes started, %lu succeeded, %1.3lf%% loss, time %1.3lf ms\n", attempt, ok, loss, wall_time_ms);
+	printf("%lu handshake(s) started, %lu succeeded, %1.3lf%% loss, time %1.3lf ms\n", attempt, ok, loss, wall_time_ms);
 	printf("rtt min/avg/max/mdev = %1.3lf/%1.3lf/%1.3lf/%1.3lf\n", rtt_min, rtt_avg, rtt_max, rtt_mdev);
 
 	exit(EX_OK);
