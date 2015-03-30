@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 		printf("Usage: %s --host=<host> --port=<port>\n", basename(argv[0]));
 		exit(EX_USAGE);
 	}
-	
+
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = 0;
@@ -111,7 +111,7 @@ int main(int argc, char** argv)
 			perror("close");
 			exit(EX_OSERR);
 		}
-	
+
 		if (clock_gettime(CLOCK_MONOTONIC, &ping_time_end) == -1)
 		{
 			perror("clock_gettime");
@@ -124,7 +124,7 @@ int main(int argc, char** argv)
 
 		time_to_ping_ms = (double)time_to_ping / 1000000.0;
 		printf("Handshaked with %s:%d (%s): attempt=%ju time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
-	
+
 		while (nanosleep(&time_to_sleep, &time_to_sleep) == -1 && errno == EINTR)
 			continue;
 	}
