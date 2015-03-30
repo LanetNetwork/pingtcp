@@ -15,19 +15,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <time.h>
 #include <unistd.h>
 
-#define APP_VERSION		"0.0.1"
+#define APP_VERSION		"0.0.2"
 #define APP_YEAR		"2015"
 #define APP_HOLDER		"Lanet Network"
 #define APP_PROGRAMMER	"Oleksandr Natalenko"
 #define APP_EMAIL		"o.natalenko@lanet.ua"
 
-#define EPOLL_MAXEVENTS	1
 #define FQDN_MAX_LENGTH	254
 
 #define memzero(A,B)	memset(A, 0, B)
@@ -71,14 +69,9 @@ int main(int argc, char** argv)
 	int socket_fd = -1;
 	int port = -1;
 	int res;
-	int sock_error = 0;
-	socklen_t sock_error_length = sizeof(int);
-	int epoll_fd = 0;
-	int epoll_count = 0;
 	uint64_t attempt = 0;
 	uint64_t ok = 0;
 	uint64_t fail = 0;
-	unsigned short int current_ok = 0;
 	unsigned short int current_ptr = 0;
 	time_t time_to_ping = 0;
 	time_t wall_time = 0;
@@ -102,8 +95,7 @@ int main(int argc, char** argv)
 	struct timespec ping_time_end;
 	struct timespec wall_time_start;
 	struct timespec wall_time_end;
-	struct epoll_event epoll_event;
-	struct epoll_event epoll_events[EPOLL_MAXEVENTS];
+	struct timeval timeout;
 	sigset_t pingtcp_newmask;
 	sigset_t pingtcp_oldmask;
 
@@ -111,10 +103,10 @@ int main(int argc, char** argv)
 	memzero(&time_to_sleep, sizeof(struct timespec));
 	memzero(&ping_time_start, sizeof(struct timespec));
 	memzero(&ping_time_end, sizeof(struct timespec));
-	memzero(&epoll_event, sizeof(struct epoll_event));
-	memzero(epoll_events, EPOLL_MAXEVENTS * sizeof(struct epoll_event));
 	memzero(&pingtcp_newmask, sizeof(sigset_t));
 	memzero(&pingtcp_oldmask, sizeof(sigset_t));
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
 
 	if (unlikely(sigemptyset(&pingtcp_newmask) != 0))
 	{
@@ -162,13 +154,6 @@ int main(int argc, char** argv)
 		exit(EX_USAGE);
 	}
 
-	epoll_fd = epoll_create1(0);
-	if (unlikely(epoll_fd == -1))
-	{
-		perror("epoll_create");
-		exit(EX_OSERR);
-	}
-
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = 0;
@@ -182,7 +167,6 @@ int main(int argc, char** argv)
 	for (;;)
 	{
 		attempt++;
-		current_ok = 0;
 		current_ptr = 0;
 
 		socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -217,54 +201,24 @@ int main(int argc, char** argv)
 		if (likely(getnameinfo((const struct sockaddr* restrict)&server_address, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 			current_ptr = 1;
 
-		time_to_sleep.tv_sec = 1;
-		time_to_sleep.tv_nsec = 0;
-
 		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_start) == -1))
 		{
 			perror("clock_gettime");
 			exit(EX_OSERR);
 		}
 
-		fcntl(socket_fd, F_SETFL, O_NONBLOCK);
-		if (unlikely(connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in)) == -1))
+		if (unlikely(setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == -1))
 		{
-			if (unlikely(errno != EINPROGRESS))
-			{
-				perror("connect");
-				exit(EX_SOFTWARE);
-			} else
-			{
-				epoll_event.data.fd = socket_fd;
-				epoll_event.events = EPOLLOUT;
-				if (unlikely(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, socket_fd, &epoll_event) == -1))
-				{
-					perror("epoll_ctl");
-					exit(EX_OSERR);
-				}
-				epoll_count = epoll_wait(epoll_fd, epoll_events, EPOLL_MAXEVENTS, 1000);
-				if (unlikely(epoll_count == -1 || epoll_count == 0))
-					fail++;
-				else
-				{
-					if (likely(getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &sock_error, &sock_error_length) == 0))
-					{
-						if (likely(sock_error == 0))
-						{
-							current_ok = 1;
-							ok++;
-						} else
-							fail++;
-					} else
-						fail++;
-				}
-				if (unlikely(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, socket_fd, NULL) == -1))
-				{
-					perror("epoll_ctl");
-					exit(EX_OSERR);
-				}
-			}
+			perror("setsockopt");
+			exit(EX_OSERR);
 		}
+		if (unlikely(setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) == -1))
+		{
+			perror("setsockopt");
+			exit(EX_OSERR);
+		}
+
+		res = connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in));
 
 		if (unlikely(close(socket_fd) == -1))
 		{
@@ -278,13 +232,13 @@ int main(int argc, char** argv)
 			exit(EX_OSERR);
 		}
 
-		time_to_ping =
-			(ping_time_end.tv_sec * 1000000000ULL + ping_time_end.tv_nsec) -
-			(ping_time_start.tv_sec * 1000000000ULL + ping_time_start.tv_nsec);
-
-		time_to_ping_ms = (double)time_to_ping / 1000000.0;
-		if (current_ok)
+		if (unlikely(res == 0))
 		{
+			time_to_ping =
+				(ping_time_end.tv_sec * 1000000000ULL + ping_time_end.tv_nsec) -
+				(ping_time_start.tv_sec * 1000000000ULL + ping_time_start.tv_nsec);
+			time_to_ping_ms = (double)time_to_ping / 1000000.0;
+
 			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, host_ip, attempt, time_to_ping_ms);
 			if (time_to_ping_ms > rtt_max)
 				rtt_max = time_to_ping_ms;
@@ -292,13 +246,21 @@ int main(int argc, char** argv)
 				rtt_min = time_to_ping_ms;
 			rtt_sum += time_to_ping_ms;
 			rtt_sum_sqr += pow(time_to_ping_ms, 2.0);
+
+			ok++;
 		} else
+		{
 			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", current_ptr ? ptr : host, port, host_ip, attempt);
 
+			fail++;
+		}
+
+		time_to_sleep.tv_sec = 1;
+		time_to_sleep.tv_nsec = 0;
 		res = sigtimedwait(&pingtcp_newmask, NULL, &time_to_sleep);
 		if (likely(res == -1))
 		{
-			if (likely(errno == EAGAIN || errno == EAGAIN))
+			if (likely(errno == EAGAIN || errno == EINTR))
 				continue;
 			else
 			{
