@@ -123,7 +123,7 @@ int main(int argc, char** argv)
 			(ping_time_start.tv_sec * 1000000000ULL + ping_time_start.tv_nsec);
 
 		time_to_ping_ms = (double)time_to_ping / 1000000.0;
-		printf("Handshaked with %s:%d (%s): attempt=%ju time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
+		printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
 
 		while (nanosleep(&time_to_sleep, &time_to_sleep) == -1 && errno == EINTR)
 			continue;
