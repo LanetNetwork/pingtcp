@@ -7,6 +7,7 @@
 #include <libgen.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -54,8 +55,36 @@ int main(int argc, char** argv)
 	struct timespec time_to_sleep;
 	struct timespec ping_time_start;
 	struct timespec ping_time_end;
+	sigset_t pingtcp_newmask;
+	sigset_t pingtcp_oldmask;
 
 	memzero(&server_address, sizeof(struct sockaddr_in));
+	memzero(&time_to_sleep, sizeof(struct timespec));
+	memzero(&ping_time_start, sizeof(struct timespec));
+	memzero(&ping_time_end, sizeof(struct timespec));
+	memzero(&pingtcp_newmask, sizeof(sigset_t));
+	memzero(&pingtcp_oldmask, sizeof(sigset_t));
+
+	if (unlikely(sigemptyset(&pingtcp_newmask) != 0))
+	{
+		perror("sigemptyset");
+		exit(EX_OSERR);
+	}
+	if (unlikely(sigaddset(&pingtcp_newmask, SIGTERM) != 0))
+	{
+		perror("sigaddset");
+		exit(EX_OSERR);
+	}
+	if (unlikely(sigaddset(&pingtcp_newmask, SIGINT) != 0))
+	{
+		perror("sigaddset");
+		exit(EX_OSERR);
+	}
+	if (unlikely(pthread_sigmask(SIG_BLOCK, &pingtcp_newmask, &pingtcp_oldmask) != 0))
+	{
+		perror("pthread_sigmask");
+		exit(EX_OSERR);
+	}
 
 	if (argc < 3)
 	{
@@ -84,7 +113,10 @@ int main(int argc, char** argv)
 	}
 	host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
 	if (unlikely(!host_ip))
+	{
 		perror("inet_ntoa");
+		exit(EX_OSERR);
+	}
 
 	printf("PINGTCP %s (%s)\n", host, host_ip);
 
@@ -137,11 +169,27 @@ int main(int argc, char** argv)
 		time_to_ping_ms = (double)time_to_ping / 1000000.0;
 		printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", host, port, host_ip, attempt, time_to_ping_ms);
 
-		while (likely(nanosleep(&time_to_sleep, &time_to_sleep) == -1 && errno == EINTR))
-			continue;
+		res = sigtimedwait(&pingtcp_newmask, NULL, &time_to_sleep);
+		if (likely(res == -1))
+		{
+			if (likely(errno == EAGAIN || errno == EAGAIN))
+				continue;
+			else
+			{
+				perror("sigtimedwait");
+				exit(EX_OSERR);
+			}
+		} else
+			break;
 	}
 
 	freeaddrinfo(server);
+
+	if (unlikely(pthread_sigmask(SIG_UNBLOCK, &pingtcp_newmask, NULL) != 0))
+	{
+		perror("pthread_sigmask");
+		exit(EX_OSERR);
+	}
 
 	exit(EX_OK);
 }
