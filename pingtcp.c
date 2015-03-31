@@ -47,22 +47,6 @@
 
 #define FQDN_MAX_LENGTH	254
 
-typedef struct pfcq_args
-{
-	char identifier;
-	char shortname;
-	char* longname;
-	char* description;
-	unsigned short int is_required;
-	unsigned short int has_value;
-} pfcq_args_t;
-
-static pfcq_args_t cmdargs[] =
-{
-	{'a', 'c', "count", "Ping attempts", 0, 1},
-	{0, 0, 0, 0, 0, 0}
-};
-
 static void __usage(char* _argv0)
 {
 	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout]\n", basename(_argv0));
