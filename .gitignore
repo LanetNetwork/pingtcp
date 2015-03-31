@@ -1,4 +1,3 @@
-pingtcp
-*.o
+build
 *~
 *.swp

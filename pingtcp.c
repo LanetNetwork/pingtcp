@@ -1,5 +1,23 @@
 /* vim: set tabstop=4:softtabstop=4:shiftwidth=4:noexpandtab */
 
+/*
+ * pingtcp - small utility to measure TCP handshake time (torify-friendly)
+ * Copyright (C) 2015 Lanet Network
+ * Programmed by Oleksandr Natalenko <o.natalenko@lanet.ua>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3 of the License
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
@@ -10,6 +28,7 @@
 #include <math.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <pfcq.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -28,40 +47,34 @@
 
 #define FQDN_MAX_LENGTH	254
 
-#define memzero(A,B)	memset(A, 0, B)
+typedef struct pfcq_args
+{
+	char identifier;
+	char shortname;
+	char* longname;
+	char* description;
+	unsigned short int is_required;
+	unsigned short int has_value;
+} pfcq_args_t;
 
-#ifdef __GNUC__
-#define likely(x)		__builtin_expect(!!(x), 1)
-#define unlikely(x)		__builtin_expect(!!(x), 0)
-#else /* __GNUC__ */
-#define likely(x)		(x)
-#define unlikely(x)		(x)
-#endif /* __GNUC__ */
+static pfcq_args_t cmdargs[] =
+{
+	{'a', 'c', "count", "Ping attempts", 0, 1},
+	{0, 0, 0, 0, 0, 0}
+};
 
 static void __usage(char* _argv0)
 {
-	fprintf(stderr, "Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout]\n", basename(_argv0));
+	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout]\n", basename(_argv0));
 	exit(EX_USAGE);
 }
 
 static void __version(void)
 {
-	fprintf(stderr, "pingtcp v%s\n", APP_VERSION);
-	fprintf(stderr, "© %s, %s\n", APP_YEAR, APP_HOLDER);
-	fprintf(stderr, "Programmed by %s <%s>\n", APP_PROGRAMMER, APP_EMAIL);
+	inform("pingtcp v%s\n", APP_VERSION);
+	inform("© %s, %s\n", APP_YEAR, APP_HOLDER);
+	inform("Programmed by %s <%s>\n", APP_PROGRAMMER, APP_EMAIL);
 	exit(EX_USAGE);
-}
-
-static int isnumber(const char* _string)
-{
-	while (likely(*_string))
-	{
-		char current_char = *_string++;
-		if (unlikely(isdigit(current_char) == 0))
-			return 0;
-	}
-
-	return 1;
 }
 
 int main(int argc, char** argv)
@@ -101,37 +114,25 @@ int main(int argc, char** argv)
 	sigset_t pingtcp_newmask;
 	sigset_t pingtcp_oldmask;
 
-	memzero(&server_address, sizeof(struct sockaddr_in));
-	memzero(&time_to_sleep, sizeof(struct timespec));
-	memzero(&ping_time_start, sizeof(struct timespec));
-	memzero(&ping_time_end, sizeof(struct timespec));
-	memzero(&pingtcp_newmask, sizeof(sigset_t));
-	memzero(&pingtcp_oldmask, sizeof(sigset_t));
+	pfcq_zero(&server_address, sizeof(struct sockaddr_in));
+	pfcq_zero(&time_to_sleep, sizeof(struct timespec));
+	pfcq_zero(&ping_time_start, sizeof(struct timespec));
+	pfcq_zero(&ping_time_end, sizeof(struct timespec));
+	pfcq_zero(&pingtcp_newmask, sizeof(sigset_t));
+	pfcq_zero(&pingtcp_oldmask, sizeof(sigset_t));
 	timeout.tv_sec = 1;
 	timeout.tv_usec = 0;
 	time_to_sleep.tv_sec = 1;
 	time_to_sleep.tv_nsec = 0;
 
 	if (unlikely(sigemptyset(&pingtcp_newmask) != 0))
-	{
-		perror("sigemptyset");
-		exit(EX_OSERR);
-	}
+		panic("sigemptyset");
 	if (unlikely(sigaddset(&pingtcp_newmask, SIGTERM) != 0))
-	{
-		perror("sigaddset");
-		exit(EX_OSERR);
-	}
+		panic("sigaddset");
 	if (unlikely(sigaddset(&pingtcp_newmask, SIGINT) != 0))
-	{
-		perror("sigaddset");
-		exit(EX_OSERR);
-	}
+		panic("sigaddset");
 	if (unlikely(pthread_sigmask(SIG_BLOCK, &pingtcp_newmask, &pingtcp_oldmask) != 0))
-	{
-		perror("pthread_sigmask");
-		exit(EX_OSERR);
-	}
+		panic("pthread_sigmask");
 
 	if (argc < 2)
 		__usage(argv[0]);
@@ -149,7 +150,7 @@ int main(int argc, char** argv)
 		if (strcmp(argv[arg_index], "--count") == 0 ||
 			strcmp(argv[arg_index], "-c") == 0)
 		{
-			if (isnumber(argv[arg_index + 1]))
+			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
 				limit = atoi(argv[arg_index + 1]);
 				arg_index += 2;
@@ -161,7 +162,7 @@ int main(int argc, char** argv)
 		if (strcmp(argv[arg_index], "--interval") == 0 ||
 			strcmp(argv[arg_index], "-i") == 0)
 		{
-			if (isnumber(argv[arg_index + 1]))
+			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
 				time_to_sleep.tv_sec = atoi(argv[arg_index + 1]);
 				arg_index += 2;
@@ -173,7 +174,7 @@ int main(int argc, char** argv)
 		if (strcmp(argv[arg_index], "--timeout") == 0 ||
 			strcmp(argv[arg_index], "-t") == 0)
 		{
-			if (isnumber(argv[arg_index + 1]))
+			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
 				timeout.tv_sec = atoi(argv[arg_index + 1]);
 				arg_index += 2;
@@ -191,7 +192,7 @@ int main(int argc, char** argv)
 
 		if (port == -1)
 		{
-			if (isnumber(argv[arg_index]))
+			if (pfcq_isnumber(argv[arg_index]))
 			{
 				port = atoi(argv[arg_index]);
 				arg_index++;
@@ -203,20 +204,14 @@ int main(int argc, char** argv)
 	}
 
 	if (port == -1)
-	{
-		fprintf(stderr, "Wrong port specified\n");
-		exit(EX_USAGE);
-	}
+		panic("Wrong port specified");
 
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = 0;
 
 	if (unlikely(clock_gettime(CLOCK_MONOTONIC, &wall_time_start) == -1))
-	{
-		perror("clock_gettime");
-		exit(EX_OSERR);
-	}
+		panic("clock_gettime");
 
 	for (;;)
 	{
@@ -225,23 +220,14 @@ int main(int argc, char** argv)
 
 		socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 		if (unlikely(socket_fd == -1))
-		{
-			perror("socket");
-			exit(EX_OSERR);
-		}
+			panic("socket");
 
 		res = getaddrinfo(host, NULL, &hints, &server);
 		if (unlikely(res))
-		{
-			fprintf(stderr, "%s\n", gai_strerror(res));
-			exit(EX_OSERR);
-		}
+			panic(gai_strerror(res));
 		host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
 		if (unlikely(!host_ip))
-		{
-			perror("inet_ntoa");
-			exit(EX_OSERR);
-		}
+			panic("inet_ntoa");
 
 		if (unlikely(attempt == 1))
 			printf("PINGTCP %s (%s:%d)\n", host, host_ip, port);
@@ -251,46 +237,29 @@ int main(int argc, char** argv)
 
 		freeaddrinfo(server);
 
-		memzero(ptr, FQDN_MAX_LENGTH);
+		pfcq_zero(ptr, FQDN_MAX_LENGTH);
 		if (likely(getnameinfo((const struct sockaddr* restrict)&server_address, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 			current_ptr = 1;
 
 		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_start) == -1))
-		{
-			perror("clock_gettime");
-			exit(EX_OSERR);
-		}
+			panic("clock_gettime");
 
 		if (unlikely(setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == -1))
-		{
-			perror("setsockopt");
-			exit(EX_OSERR);
-		}
+			panic("setsockopt");
 		if (unlikely(setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) == -1))
-		{
-			perror("setsockopt");
-			exit(EX_OSERR);
-		}
+			panic("setsockopt");
 
 		res = connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in));
 
 		if (unlikely(close(socket_fd) == -1))
-		{
-			perror("close");
-			exit(EX_OSERR);
-		}
+			panic("close");
 
 		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_end) == -1))
-		{
-			perror("clock_gettime");
-			exit(EX_OSERR);
-		}
+			panic("clock_gettime");
 
 		if (unlikely(res == 0))
 		{
-			time_to_ping =
-				(ping_time_end.tv_sec * 1000000000ULL + ping_time_end.tv_nsec) -
-				(ping_time_start.tv_sec * 1000000000ULL + ping_time_start.tv_nsec);
+			time_to_ping = __pfcq_timespec_diff_ns(ping_time_start, ping_time_end);
 			time_to_ping_ms = (double)time_to_ping / 1000000.0;
 
 			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, host_ip, attempt, time_to_ping_ms);
@@ -318,31 +287,20 @@ int main(int argc, char** argv)
 			if (likely(errno == EAGAIN || errno == EINTR))
 				continue;
 			else
-			{
-				perror("sigtimedwait");
-				exit(EX_OSERR);
-			}
+				panic("sigtimedwait");
 		} else
 			break;
 	}
 
 	if (unlikely(clock_gettime(CLOCK_MONOTONIC, &wall_time_end) == -1))
-	{
-		perror("clock_gettime");
-		exit(EX_OSERR);
-	}
+		panic("clock_gettime");
 
 	if (unlikely(pthread_sigmask(SIG_UNBLOCK, &pingtcp_newmask, NULL) != 0))
-	{
-		perror("pthread_sigmask");
-		exit(EX_OSERR);
-	}
+		panic("pthread_sigmask");
 
 	printf("\n--- %s:%d pingtcp statistics ---\n", host, port);
 	loss = (double)fail / (double)attempt * 100.0;
-	wall_time =
-			(wall_time_end.tv_sec * 1000000000ULL + wall_time_end.tv_nsec) -
-			(wall_time_start.tv_sec * 1000000000ULL + wall_time_start.tv_nsec);
+	wall_time = __pfcq_timespec_diff_ns(wall_time_start, wall_time_end);
 	wall_time_ms = (double)wall_time / 1000000.0;
 	if (ok > 0)
 	{
