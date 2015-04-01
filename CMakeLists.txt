@@ -44,4 +44,5 @@ target_link_libraries(pingtcp
 	rt
 	pthread
 	m
-	ln_pfcquirks)
+	ln_pfcquirks
+	${GB_LD_EXTRA})
