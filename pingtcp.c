@@ -349,6 +349,9 @@ torloaded:
 	printf("%lu handshake(s) started, %lu succeeded, %1.3lf%% loss, time %1.3lf ms\n", attempt, ok, loss, wall_time_ms);
 	printf("rtt min/avg/max/mdev = %1.3lf/%1.3lf/%1.3lf/%1.3lf\n", rtt_min, rtt_avg, rtt_max, rtt_mdev);
 
+	if (torsocks_hd)
+		dlclose(torsocks_hd);
+
 	exit(EX_OK);
 }
 
