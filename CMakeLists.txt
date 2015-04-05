@@ -47,3 +47,6 @@ target_link_libraries(pingtcp
 	m
 	ln_pfcquirks
 	${GB_LD_EXTRA})
+
+install(TARGETS pingtcp
+	RUNTIME DESTINATION bin)
