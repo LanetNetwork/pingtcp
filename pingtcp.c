@@ -20,6 +20,7 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <float.h>
@@ -49,7 +50,7 @@
 
 static void __usage(char* _argv0)
 {
-	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout]\n", basename(_argv0));
+	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout] [--tor]\n", basename(_argv0));
 	exit(EX_USAGE);
 }
 
@@ -63,6 +64,22 @@ static void __version(void)
 
 int main(int argc, char** argv)
 {
+	int (*socket)(int, int, int);
+	int (*getaddrinfo)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
+	void (*freeaddrinfo)(struct addrinfo*);
+	char* (*inet_ntoa)(struct in_addr);
+	int (*getnameinfo)(const struct sockaddr*, socklen_t, char*, socklen_t, char*, socklen_t, int);
+	int (*connect)(int, const struct sockaddr*, socklen_t);
+	int (*close)(int);
+
+	*(void**)(&socket) = dlsym(NULL, "socket");
+	*(void**)(&getaddrinfo) = dlsym(NULL, "getaddrinfo");
+	*(void**)(&freeaddrinfo) = dlsym(NULL, "freeaddrinfo");
+	*(void**)(&inet_ntoa) = dlsym(NULL, "inet_ntoa");
+	*(void**)(&getnameinfo) = dlsym(NULL, "getnameinfo");
+	*(void**)(&connect) = dlsym(NULL, "connect");
+	*(void**)(&close) = dlsym(NULL, "close");
+
 	int socket_fd = -1;
 	int port = -1;
 	int res;
@@ -97,6 +114,7 @@ int main(int argc, char** argv)
 	struct timeval timeout;
 	sigset_t pingtcp_newmask;
 	sigset_t pingtcp_oldmask;
+	void* torsocks_hd = NULL;
 
 	pfcq_zero(&server_address, sizeof(struct sockaddr_in));
 	pfcq_zero(&time_to_sleep, sizeof(struct timespec));
@@ -165,6 +183,37 @@ int main(int argc, char** argv)
 				continue;
 			} else
 				__usage(argv[0]);
+		}
+
+		if (strcmp(argv[arg_index], "--tor") == 0 ||
+			strcmp(argv[arg_index], "-T") == 0)
+		{
+			torsocks_hd = dlopen("libtorsocks.so", RTLD_LAZY);
+			if (torsocks_hd)
+				goto torloaded;
+			torsocks_hd = dlopen("/usr/lib/libtorsocks.so", RTLD_LAZY);
+			if (torsocks_hd)
+				goto torloaded;
+			torsocks_hd = dlopen("/usr/lib64/libtorsocks.so", RTLD_LAZY);
+			if (torsocks_hd)
+				goto torloaded;
+			torsocks_hd = dlopen("/usr/lib/torsocks/libtorsocks.so", RTLD_LAZY);
+			if (torsocks_hd)
+				goto torloaded;
+			torsocks_hd = dlopen("/usr/lib64/torsocks/libtorsocks.so", RTLD_LAZY);
+			if (torsocks_hd)
+				goto torloaded;
+			panic("torsocks");
+torloaded:
+			*(void**)(&socket) = dlsym(torsocks_hd, "socket");
+			*(void**)(&getaddrinfo) = dlsym(torsocks_hd, "getaddrinfo");
+			*(void**)(&freeaddrinfo) = dlsym(torsocks_hd, "freeaddrinfo");
+			*(void**)(&inet_ntoa) = dlsym(torsocks_hd, "inet_ntoa");
+			*(void**)(&getnameinfo) = dlsym(torsocks_hd, "getnameinfo");
+			*(void**)(&connect) = dlsym(torsocks_hd, "connect");
+			*(void**)(&close) = dlsym(torsocks_hd, "close");
+
+			arg_index++;
 		}
 
 		if (!host)

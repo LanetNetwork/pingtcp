@@ -41,6 +41,7 @@ add_executable(pingtcp
 	pingtcp.c)
 
 target_link_libraries(pingtcp
+	dl
 	rt
 	pthread
 	m
