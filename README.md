@@ -41,6 +41,7 @@ The following arguments are supported:
 * -c &lt;attempts&gt; (optional, defaults to infinity) specifies handshake attempts count;
 * -i &lt;seconds&gt; (optional, defaults to 1 sec) specifies interval between attempts;
 * -t &lt;seconds&gt; (optional, defaults to 1 sec) specifies TCP connection timeout;
+* --tor (optional) uses libtorsocks to connect over TOR network.
 
 Distribution and Contribution
 -----------------------------
