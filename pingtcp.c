@@ -67,7 +67,7 @@ int main(int argc, char** argv)
 	int (*socket)(int, int, int);
 	int (*getaddrinfo)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
 	void (*freeaddrinfo)(struct addrinfo*);
-	char* (*inet_ntoa)(struct in_addr);
+	const char* (*inet_ntop)(int, const void*, char*, socklen_t);
 	int (*getnameinfo)(const struct sockaddr*, socklen_t, char*, socklen_t, char*, socklen_t, int);
 	int (*connect)(int, const struct sockaddr*, socklen_t);
 	int (*close)(int);
@@ -75,7 +75,7 @@ int main(int argc, char** argv)
 	*(void**)(&socket) = dlsym(NULL, "socket");
 	*(void**)(&getaddrinfo) = dlsym(NULL, "getaddrinfo");
 	*(void**)(&freeaddrinfo) = dlsym(NULL, "freeaddrinfo");
-	*(void**)(&inet_ntoa) = dlsym(NULL, "inet_ntoa");
+	*(void**)(&inet_ntop) = dlsym(NULL, "inet_ntop");
 	*(void**)(&getnameinfo) = dlsym(NULL, "getnameinfo");
 	*(void**)(&connect) = dlsym(NULL, "connect");
 	*(void**)(&close) = dlsym(NULL, "close");
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 	double rtt_sum_sqr = 0;
 	double rtt_mdev = 0;
 	char* host = NULL;
-	char* host_ip = NULL;
+	char host_ip[INET_ADDRSTRLEN];
 	char ptr[FQDN_MAX_LENGTH];
 	struct addrinfo* server = NULL;
 	struct addrinfo hints;
@@ -208,7 +208,7 @@ torloaded:
 			*(void**)(&socket) = dlsym(torsocks_hd, "socket");
 			*(void**)(&getaddrinfo) = dlsym(torsocks_hd, "getaddrinfo");
 			*(void**)(&freeaddrinfo) = dlsym(torsocks_hd, "freeaddrinfo");
-			*(void**)(&inet_ntoa) = dlsym(torsocks_hd, "inet_ntoa");
+			*(void**)(&inet_ntop) = dlsym(torsocks_hd, "inet_ntop");
 			*(void**)(&getnameinfo) = dlsym(torsocks_hd, "getnameinfo");
 			*(void**)(&connect) = dlsym(torsocks_hd, "connect");
 			*(void**)(&close) = dlsym(torsocks_hd, "close");
@@ -258,9 +258,8 @@ torloaded:
 		res = getaddrinfo(host, NULL, &hints, &server);
 		if (unlikely(res))
 			panic(gai_strerror(res));
-		host_ip = inet_ntoa(((struct sockaddr_in*)server->ai_addr)->sin_addr);
-		if (unlikely(!host_ip))
-			panic("inet_ntoa");
+		if (unlikely(!inet_ntop(AF_INET, &((struct sockaddr_in*)server->ai_addr)->sin_addr, host_ip, INET_ADDRSTRLEN)))
+			panic("inet_ntop");
 
 		if (unlikely(attempt == 1))
 			printf("PINGTCP %s (%s:%d)\n", host, host_ip, port);
