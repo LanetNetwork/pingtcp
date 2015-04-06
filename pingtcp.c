@@ -240,7 +240,7 @@ torloaded:
 		panic("Wrong port specified");
 
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
-	hints.ai_family = PF_INET;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = 0;
 
 	if (unlikely(clock_gettime(CLOCK_MONOTONIC, &wall_time_start) == -1))
