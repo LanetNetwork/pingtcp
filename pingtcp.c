@@ -50,7 +50,7 @@
 
 static void __usage(char* _argv0)
 {
-	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout] [--tor]\n", basename(_argv0));
+	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout] [--tor | -6]\n", basename(_argv0));
 	exit(EX_USAGE);
 }
 
@@ -89,6 +89,7 @@ int main(int argc, char** argv)
 	uint64_t fail = 0;
 	uint64_t limit = 0;
 	unsigned short int current_ptr = 0;
+	unsigned short int ipv6 = 0;
 	time_t time_to_ping = 0;
 	time_t wall_time = 0;
 	double time_to_ping_ms = 0;
@@ -101,11 +102,13 @@ int main(int argc, char** argv)
 	double rtt_sum_sqr = 0;
 	double rtt_mdev = 0;
 	char* host = NULL;
-	char host_ip[INET_ADDRSTRLEN];
+	char host_ipv4[INET_ADDRSTRLEN];
+	char host_ipv6[INET6_ADDRSTRLEN];
 	char ptr[FQDN_MAX_LENGTH];
 	struct addrinfo* server = NULL;
 	struct addrinfo hints;
-	struct sockaddr_in server_address;
+	struct sockaddr_in server_address_ipv4;
+	struct sockaddr_in6 server_address_ipv6;
 	struct timespec time_to_sleep;
 	struct timespec ping_time_start;
 	struct timespec ping_time_end;
@@ -116,7 +119,8 @@ int main(int argc, char** argv)
 	sigset_t pingtcp_oldmask;
 	void* torsocks_hd = NULL;
 
-	pfcq_zero(&server_address, sizeof(struct sockaddr_in));
+	pfcq_zero(&server_address_ipv4, sizeof(struct sockaddr_in));
+	pfcq_zero(&server_address_ipv6, sizeof(struct sockaddr_in6));
 	pfcq_zero(&time_to_sleep, sizeof(struct timespec));
 	pfcq_zero(&ping_time_start, sizeof(struct timespec));
 	pfcq_zero(&ping_time_end, sizeof(struct timespec));
@@ -214,6 +218,15 @@ torloaded:
 			*(void**)(&close) = dlsym(torsocks_hd, "close");
 
 			arg_index++;
+			continue;
+		}
+
+		if (strcmp(argv[arg_index], "--ipv6") == 0 ||
+			strcmp(argv[arg_index], "-6") == 0)
+		{
+			ipv6 = 1;
+			arg_index++;
+			continue;
 		}
 
 		if (!host)
@@ -240,7 +253,7 @@ torloaded:
 		panic("Wrong port specified");
 
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
-	hints.ai_family = AF_INET;
+	hints.ai_family = ipv6 ? AF_INET6 : AF_INET;
 	hints.ai_socktype = 0;
 
 	if (unlikely(clock_gettime(CLOCK_MONOTONIC, &wall_time_start) == -1))
@@ -251,27 +264,49 @@ torloaded:
 		attempt++;
 		current_ptr = 0;
 
-		socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+		socket_fd = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0);
 		if (unlikely(socket_fd == -1))
 			panic("socket");
 
 		res = getaddrinfo(host, NULL, &hints, &server);
 		if (unlikely(res))
 			panic(gai_strerror(res));
-		if (unlikely(!inet_ntop(AF_INET, &((struct sockaddr_in*)server->ai_addr)->sin_addr, host_ip, INET_ADDRSTRLEN)))
-			panic("inet_ntop");
+		if (ipv6)
+		{
+			if (unlikely(!inet_ntop(AF_INET6, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, host_ipv6, INET6_ADDRSTRLEN)))
+				panic("inet_ntop");
+		} else
+		{
+			if (unlikely(!inet_ntop(AF_INET, &((struct sockaddr_in*)server->ai_addr)->sin_addr, host_ipv4, INET_ADDRSTRLEN)))
+				panic("inet_ntop");
+		}
 
 		if (unlikely(attempt == 1))
-			printf("PINGTCP %s (%s:%d)\n", host, host_ip, port);
-		server_address.sin_family = AF_INET;
-		memcpy(&server_address.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
-		server_address.sin_port = htons(port);
+			printf("PINGTCP %s (%s:%d)\n", host, ipv6 ? host_ipv6 : host_ipv4, port);
+		if (ipv6)
+		{
+			server_address_ipv6.sin6_family = AF_INET6;
+			memcpy(&server_address_ipv6.sin6_addr, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, sizeof(struct in6_addr));
+			server_address_ipv6.sin6_port = htons(port);
+		} else
+		{
+			server_address_ipv4.sin_family = AF_INET;
+			memcpy(&server_address_ipv4.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
+			server_address_ipv4.sin_port = htons(port);
+		}
 
 		freeaddrinfo(server);
 
 		pfcq_zero(ptr, FQDN_MAX_LENGTH);
-		if (likely(getnameinfo((const struct sockaddr* restrict)&server_address, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
-			current_ptr = 1;
+		if (ipv6)
+		{
+			if (likely(getnameinfo((const struct sockaddr* restrict)&server_address_ipv6, sizeof(struct sockaddr_in6), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				current_ptr = 1;
+		} else
+		{
+			if (likely(getnameinfo((const struct sockaddr* restrict)&server_address_ipv4, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				current_ptr = 1;
+		}
 
 		if (unlikely(clock_gettime(CLOCK_MONOTONIC, &ping_time_start) == -1))
 			panic("clock_gettime");
@@ -281,7 +316,10 @@ torloaded:
 		if (unlikely(setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) == -1))
 			panic("setsockopt");
 
-		res = connect(socket_fd, (struct sockaddr*)&server_address, sizeof(struct sockaddr_in));
+		if (ipv6)
+			res = connect(socket_fd, (struct sockaddr*)&server_address_ipv6, sizeof(struct sockaddr_in6));
+		else
+			res = connect(socket_fd, (struct sockaddr*)&server_address_ipv4, sizeof (struct sockaddr_in));
 
 		if (unlikely(close(socket_fd) == -1))
 			panic("close");
@@ -294,7 +332,7 @@ torloaded:
 			time_to_ping = __pfcq_timespec_diff_ns(ping_time_start, ping_time_end);
 			time_to_ping_ms = (double)time_to_ping / 1000000.0;
 
-			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, host_ip, attempt, time_to_ping_ms);
+			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, ipv6 ? host_ipv6 : host_ipv4, attempt, time_to_ping_ms);
 			if (time_to_ping_ms > rtt_max)
 				rtt_max = time_to_ping_ms;
 			if (time_to_ping_ms < rtt_min)
@@ -305,7 +343,7 @@ torloaded:
 			ok++;
 		} else
 		{
-			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", current_ptr ? ptr : host, port, host_ip, attempt);
+			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", current_ptr ? ptr : host, port, ipv6 ? host_ipv6 : host_ipv4, attempt);
 
 			fail++;
 		}
