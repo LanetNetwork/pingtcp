@@ -387,7 +387,8 @@ torloaded:
 	printf("rtt min/avg/max/mdev = %1.3lf/%1.3lf/%1.3lf/%1.3lf\n", rtt_min, rtt_avg, rtt_max, rtt_mdev);
 
 	if (torsocks_hd)
-		dlclose(torsocks_hd);
+		if (unlikely(dlclose(torsocks_hd) != 0))
+			panic("dlclose");
 
 	exit(EX_OK);
 }
