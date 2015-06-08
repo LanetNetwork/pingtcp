@@ -280,7 +280,7 @@ torloaded:
 
 		res = getaddrinfo(dst, NULL, &hints, &server);
 		if (unlikely(res))
-			panic(gai_strerror(res));
+			stop(gai_strerror(res));
 		switch (proto)
 		{
 			case PF_INET:
