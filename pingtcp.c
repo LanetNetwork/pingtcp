@@ -40,7 +40,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define APP_VERSION		"0.0.2"
+#define APP_VERSION		"0.0.3"
 #define APP_YEAR		"2015"
 #define APP_HOLDER		"Lanet Network"
 #define APP_PROGRAMMER	"Oleksandr Natalenko"
