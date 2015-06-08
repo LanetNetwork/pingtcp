@@ -241,7 +241,7 @@ torloaded:
 
 		if (!dst)
 		{
-			dst = strdupa(argv[arg_index]);
+			dst = pfcq_strdup(argv[arg_index]);
 			arg_index++;
 			continue;
 		}
@@ -424,6 +424,8 @@ torloaded:
 	if (torsocks_hd)
 		if (unlikely(dlclose(torsocks_hd) != 0))
 			panic("dlclose");
+
+	pfcq_free(dst);
 
 	exit(EX_OK);
 }
