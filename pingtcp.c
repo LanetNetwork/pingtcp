@@ -217,7 +217,7 @@ int main(int argc, char** argv)
 			torsocks_hd = dlopen("/usr/lib64/torsocks/libtorsocks.so", RTLD_LAZY);
 			if (torsocks_hd)
 				goto torloaded;
-			panic("torsocks");
+			stop("Unable to load libtorsocks");
 torloaded:
 			*(void**)(&socket) = dlsym(torsocks_hd, "socket");
 			*(void**)(&getaddrinfo) = dlsym(torsocks_hd, "getaddrinfo");
