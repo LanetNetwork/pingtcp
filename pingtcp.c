@@ -48,6 +48,18 @@
 
 #define FQDN_MAX_LENGTH	254
 
+typedef union address
+{
+	struct sockaddr_in address4;
+	struct sockaddr_in6 address6;
+} address_t;
+
+typedef union host
+{
+	char host4[INET_ADDRSTRLEN];
+	char host6[INET6_ADDRSTRLEN];
+} host_t;
+
 static void __usage(char* _argv0)
 {
 	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout] [--tor | -6]\n", basename(_argv0));
@@ -101,14 +113,12 @@ int main(int argc, char** argv)
 	double rtt_sum = 0;
 	double rtt_sum_sqr = 0;
 	double rtt_mdev = 0;
-	char* host = NULL;
-	char host_ipv4[INET_ADDRSTRLEN];
-	char host_ipv6[INET6_ADDRSTRLEN];
+	char* dst = NULL;
 	char ptr[FQDN_MAX_LENGTH];
+	address_t address;
+	host_t host;
 	struct addrinfo* server = NULL;
 	struct addrinfo hints;
-	struct sockaddr_in server_address_ipv4;
-	struct sockaddr_in6 server_address_ipv6;
 	struct timespec time_to_sleep;
 	struct timespec ping_time_start;
 	struct timespec ping_time_end;
@@ -119,8 +129,8 @@ int main(int argc, char** argv)
 	sigset_t pingtcp_oldmask;
 	void* torsocks_hd = NULL;
 
-	pfcq_zero(&server_address_ipv4, sizeof(struct sockaddr_in));
-	pfcq_zero(&server_address_ipv6, sizeof(struct sockaddr_in6));
+	pfcq_zero(&address, sizeof(address_t));
+	pfcq_zero(&host, sizeof(host_t));
 	pfcq_zero(&time_to_sleep, sizeof(struct timespec));
 	pfcq_zero(&ping_time_start, sizeof(struct timespec));
 	pfcq_zero(&ping_time_end, sizeof(struct timespec));
@@ -229,9 +239,9 @@ torloaded:
 			continue;
 		}
 
-		if (!host)
+		if (!dst)
 		{
-			host = strdupa(argv[arg_index]);
+			dst = strdupa(argv[arg_index]);
 			arg_index++;
 			continue;
 		}
@@ -268,17 +278,17 @@ torloaded:
 		if (unlikely(socket_fd == -1))
 			panic("socket");
 
-		res = getaddrinfo(host, NULL, &hints, &server);
+		res = getaddrinfo(dst, NULL, &hints, &server);
 		if (unlikely(res))
 			panic(gai_strerror(res));
 		switch (proto)
 		{
 			case PF_INET:
-				if (unlikely(!inet_ntop(AF_INET, &((struct sockaddr_in*)server->ai_addr)->sin_addr, host_ipv4, INET_ADDRSTRLEN)))
+				if (unlikely(!inet_ntop(AF_INET, &((struct sockaddr_in*)server->ai_addr)->sin_addr, host.host4, INET_ADDRSTRLEN)))
 					panic("inet_ntop");
 				break;
 			case PF_INET6:
-				if (unlikely(!inet_ntop(AF_INET6, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, host_ipv6, INET6_ADDRSTRLEN)))
+				if (unlikely(!inet_ntop(AF_INET6, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, host.host6, INET6_ADDRSTRLEN)))
 					panic("inet_ntop");
 				break;
 			default:
@@ -287,18 +297,18 @@ torloaded:
 		}
 
 		if (unlikely(attempt == 1))
-			printf("PINGTCP %s (%s:%d)\n", host, proto == PF_INET6 ? host_ipv6 : host_ipv4, port);
+			printf("PINGTCP %s (%s:%d)\n", dst, proto == PF_INET6 ? host.host6 : host.host4, port);
 		switch (proto)
 		{
 			case PF_INET:
-				server_address_ipv4.sin_family = AF_INET;
-				memcpy(&server_address_ipv4.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
-				server_address_ipv4.sin_port = htons(port);
+				address.address4.sin_family = AF_INET;
+				memcpy(&address.address4.sin_addr, &((struct sockaddr_in*)server->ai_addr)->sin_addr, sizeof(struct in_addr));
+				address.address4.sin_port = htons(port);
 				break;
 			case PF_INET6:
-				server_address_ipv6.sin6_family = AF_INET6;
-				memcpy(&server_address_ipv6.sin6_addr, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, sizeof(struct in6_addr));
-				server_address_ipv6.sin6_port = htons(port);
+				address.address6.sin6_family = AF_INET6;
+				memcpy(&address.address6.sin6_addr, &((struct sockaddr_in6*)server->ai_addr)->sin6_addr, sizeof(struct in6_addr));
+				address.address6.sin6_port = htons(port);
 				break;
 			default:
 				panic("socket family");
@@ -311,11 +321,11 @@ torloaded:
 		switch (proto)
 		{
 			case PF_INET:
-				if (likely(getnameinfo((const struct sockaddr* restrict)&server_address_ipv4, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				if (likely(getnameinfo((const struct sockaddr* restrict)&address.address4, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 					current_ptr = 1;
 				break;
 			case PF_INET6:
-				if (likely(getnameinfo((const struct sockaddr* restrict)&server_address_ipv6, sizeof(struct sockaddr_in6), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				if (likely(getnameinfo((const struct sockaddr* restrict)&address.address6, sizeof(struct sockaddr_in6), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 					current_ptr = 1;
 				break;
 			default:
@@ -334,10 +344,10 @@ torloaded:
 		switch (proto)
 		{
 			case PF_INET:
-				res = connect(socket_fd, (struct sockaddr*)&server_address_ipv4, sizeof (struct sockaddr_in));
+				res = connect(socket_fd, (struct sockaddr*)&address.address4, sizeof (struct sockaddr_in));
 				break;
 			case PF_INET6:
-				res = connect(socket_fd, (struct sockaddr*)&server_address_ipv6, sizeof(struct sockaddr_in6));
+				res = connect(socket_fd, (struct sockaddr*)&address.address6, sizeof(struct sockaddr_in6));
 				break;
 			default:
 				panic("socket family");
@@ -355,7 +365,8 @@ torloaded:
 			time_to_ping = __pfcq_timespec_diff_ns(ping_time_start, ping_time_end);
 			time_to_ping_ms = (double)time_to_ping / 1000000.0;
 
-			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n", current_ptr ? ptr : host, port, proto == PF_INET6 ? host_ipv6 : host_ipv4, attempt, time_to_ping_ms);
+			printf("Handshaked with %s:%d (%s): attempt=%lu time=%1.3lf ms\n",
+					current_ptr ? ptr : dst, port, proto == PF_INET6 ? host.host6 : host.host4, attempt, time_to_ping_ms);
 			if (time_to_ping_ms > rtt_max)
 				rtt_max = time_to_ping_ms;
 			if (time_to_ping_ms < rtt_min)
@@ -366,7 +377,8 @@ torloaded:
 			ok++;
 		} else
 		{
-			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n", current_ptr ? ptr : host, port, proto == PF_INET6 ? host_ipv6 : host_ipv4, attempt);
+			printf("Unable to handshake with %s:%d (%s): attempt=%lu\n",
+					current_ptr ? ptr : dst, port, proto == PF_INET6 ? host.host6 : host.host4, attempt);
 
 			fail++;
 		}
@@ -391,7 +403,7 @@ torloaded:
 	if (unlikely(pthread_sigmask(SIG_UNBLOCK, &pingtcp_newmask, NULL) != 0))
 		panic("pthread_sigmask");
 
-	printf("\n--- %s:%d pingtcp statistics ---\n", host, port);
+	printf("\n--- %s:%d pingtcp statistics ---\n", dst, port);
 	loss = (double)fail / (double)attempt * 100.0;
 	wall_time = __pfcq_timespec_diff_ns(wall_time_start, wall_time_end);
 	wall_time_ms = (double)wall_time / 1000000.0;
