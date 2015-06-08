@@ -180,7 +180,7 @@ int main(int argc, char** argv)
 		{
 			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
-				time_to_sleep.tv_sec = atoi(argv[arg_index + 1]);
+				time_to_sleep = __pfcq_ns_to_timespec(strtoul(argv[arg_index + 1], NULL, 10) * 1000000UL);
 				arg_index += 2;
 				continue;
 			} else
@@ -192,7 +192,7 @@ int main(int argc, char** argv)
 		{
 			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
-				timeout.tv_sec = atoi(argv[arg_index + 1]);
+				timeout = __pfcq_us_to_timeval(strtoul(argv[arg_index + 1], NULL, 10) * 1000UL);
 				arg_index += 2;
 				continue;
 			} else

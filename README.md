@@ -39,8 +39,8 @@ Typical usage:
 The following arguments are supported:
 
 * -c &lt;attempts&gt; (optional, defaults to infinity) specifies handshake attempts count;
-* -i &lt;seconds&gt; (optional, defaults to 1 sec) specifies interval between attempts;
-* -t &lt;seconds&gt; (optional, defaults to 1 sec) specifies TCP connection timeout;
+* -i &lt;milliseconds&gt; (optional, defaults to 1 sec) specifies interval between attempts;
+* -t &lt;milliseconds&gt; (optional, defaults to 1 sec) specifies TCP connection timeout;
 * --tor (optional) uses libtorsocks to connect over TOR network;
 * -6 (optional) use IPv6 (seems to be incompatible with TOR).
 
