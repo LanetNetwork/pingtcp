@@ -260,7 +260,7 @@ torloaded:
 	}
 
 	if (port == -1)
-		panic("Wrong port specified");
+		stop("Wrong port specified");
 
 	hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
 	hints.ai_family = proto == PF_INET6 ? AF_INET6 : AF_INET;
