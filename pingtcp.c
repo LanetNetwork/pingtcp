@@ -168,7 +168,7 @@ int main(int argc, char** argv)
 		{
 			if (arg_index < argc - 1 && pfcq_isnumber(argv[arg_index + 1]))
 			{
-				limit = atoi(argv[arg_index + 1]);
+				limit = strtoul(argv[arg_index + 1], NULL, 10);
 				arg_index += 2;
 				continue;
 			} else
@@ -250,7 +250,7 @@ torloaded:
 		{
 			if (pfcq_isnumber(argv[arg_index]))
 			{
-				port = atoi(argv[arg_index]);
+				port = strtoul(argv[arg_index], NULL, 10);
 				arg_index++;
 				continue;
 			}
