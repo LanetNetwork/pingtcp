@@ -48,18 +48,6 @@
 
 #define FQDN_MAX_LENGTH	254
 
-typedef union address
-{
-	struct sockaddr_in address4;
-	struct sockaddr_in6 address6;
-} address_t;
-
-typedef union host
-{
-	char host4[INET_ADDRSTRLEN];
-	char host6[INET6_ADDRSTRLEN];
-} host_t;
-
 static void __usage(char* _argv0)
 {
 	inform("Usage: %s <host> <port> [-c attempts] [-i interval] [-t timeout] [--tor | -6]\n", basename(_argv0));
@@ -115,8 +103,8 @@ int main(int argc, char** argv)
 	double rtt_mdev = 0;
 	char* dst = NULL;
 	char ptr[FQDN_MAX_LENGTH];
-	address_t address;
-	host_t host;
+	pfcq_net_address_t address;
+	pfcq_net_host_t host;
 	struct addrinfo* server = NULL;
 	struct addrinfo hints;
 	struct timespec time_to_sleep;
@@ -129,8 +117,8 @@ int main(int argc, char** argv)
 	sigset_t pingtcp_oldmask;
 	void* torsocks_hd = NULL;
 
-	pfcq_zero(&address, sizeof(address_t));
-	pfcq_zero(&host, sizeof(host_t));
+	pfcq_zero(&address, sizeof(pfcq_net_address_t));
+	pfcq_zero(&host, sizeof(pfcq_net_host_t));
 	pfcq_zero(&time_to_sleep, sizeof(struct timespec));
 	pfcq_zero(&ping_time_start, sizeof(struct timespec));
 	pfcq_zero(&ping_time_end, sizeof(struct timespec));
