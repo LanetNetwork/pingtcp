@@ -29,7 +29,6 @@
 #include <math.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <pfcq.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -40,8 +39,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#define APP_VERSION		"0.0.3"
-#define APP_YEAR		"2015"
+#include "contrib/pfcq/pfcq.h"
+
+#define APP_VERSION		"0.0.4"
+#define APP_YEAR		"2015–2016"
 #define APP_HOLDER		"Lanet Network"
 #define APP_PROGRAMMER	"Oleksandr Natalenko"
 #define APP_EMAIL		"o.natalenko@lanet.ua"

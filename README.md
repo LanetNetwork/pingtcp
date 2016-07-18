@@ -14,16 +14,10 @@ Compiling
 * make (tested with GNU Make 3.82)
 * gcc (tested with 4.8.2)
 * cmake (tested with 2.8.11)
-* pfcquirks (is available as git submodule)
 
 ### Compiling
 
-First, initialize and update git submodules:
-
-`git submodule init`
-`git submodule update`
-
-Then create `build` folder, chdir to it and type:
+Create `build` folder, chdir to it and type:
 
 `cmake ..`
 
