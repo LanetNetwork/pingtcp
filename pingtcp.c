@@ -310,11 +310,11 @@ torloaded:
 		switch (proto)
 		{
 			case PF_INET:
-				if (likely(getnameinfo((const struct sockaddr* restrict)&address.address4, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				if (likely(getnameinfo((const struct sockaddr*)&address.address4, sizeof(struct sockaddr_in), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 					current_ptr = 1;
 				break;
 			case PF_INET6:
-				if (likely(getnameinfo((const struct sockaddr* restrict)&address.address6, sizeof(struct sockaddr_in6), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
+				if (likely(getnameinfo((const struct sockaddr*)&address.address6, sizeof(struct sockaddr_in6), ptr, FQDN_MAX_LENGTH, NULL, 0, NI_NAMEREQD) == 0))
 					current_ptr = 1;
 				break;
 			default:
